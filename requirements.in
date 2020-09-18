@@ -1,0 +1,28 @@
+pip-tools
+wget
+gdown
+
+numpy
+pandas
+torch
+torchvision
+transformers>=3.1
+pytorch-lightning
+omegaconf>=2
+yapf
+watermark
+pyarrow>=0.16.0          # via d6tflow, nlp
+
+d6tflow
+luigi
+pylint
+# hydra-core
+skorch
+
+matplotlib
+seaborn
+traitlets==4.3.3
+numexpr
+pylatexenc
+
+nlp

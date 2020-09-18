@@ -1,0 +1,24 @@
+python bert_fine_tuning_lightning/bert_fine_tuning_lightning_google.py \
+    --pretrained distilbert-base-uncased \
+    --max_epochs 2 \
+    --use_autos True \
+    --limit_train_batches 100 \
+    --limit_val_batches 100 \
+    --frac 1 \
+    --fast_dev_run True
+
+
+
+
+
+python bert_fine_tuning_lightning/bert_fine_tuning_lightning_google.py \
+    --pretrained bert-base-uncased \
+    --max_epochs 2 \
+    --use_autos True \
+    --limit_train_batches 100 \
+    --limit_val_batches 100 \
+    --frac 1 \
+    --fast_dev_run True
+
+
+    bert-base-uncased"
