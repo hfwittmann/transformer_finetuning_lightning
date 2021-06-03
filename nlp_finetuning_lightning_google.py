@@ -1,4 +1,4 @@
-## Start : Import the packages
+# Start : Import the packages
 import pandas as pd
 import os
 import pathlib
@@ -21,6 +21,7 @@ from transformers import AdamW
 from transformers import get_linear_schedule_with_warmup
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping
+from pytorch_lightning.loggers import TensorBoardLogger
 
 # End : Import the packages
 # %%
@@ -50,7 +51,7 @@ class Model(pl.LightningModule):
 
         # eg https://github.com/stefan-it/turkish-bert/issues/5
         config = AutoConfig.from_pretrained(self.hparams.pretrained,
-                                            num_labels=5,
+                                            num_labels=5,  # 1 implies regression
                                             output_attentions=False,
                                             output_hidden_states=False)
 
@@ -98,21 +99,21 @@ class Model(pl.LightningModule):
 
         b_labels = batch[2] if has_labels else None
 
-        # there are labels in the batch, this indicates: training for the BertForSequenceClassification model:
-        # it means that the model returns tuple, where the first element is the training loss and the second
-        # element is the logits
-        if has_labels:
-            loss, logits = self.model(b_input_ids,
+        res = self.model(b_input_ids,
                                       attention_mask=b_input_mask,
                                       labels=b_labels)
+
+        # there are labels in the batch, this indicates: training for the BertForSequenceClassification model:
+        # it means that the model returns tuples, where the first element is the training loss and the second
+        # element is the logits
+        if has_labels:
+            loss, logits = res['loss'], res['logits']
 
         # there are labels in the batch, this indicates: prediction for the BertForSequenceClassification
         # model: it means that the model returns simply the logits
 
         if not has_labels:
-            loss, logits = None, self.model(b_input_ids,
-                                            attention_mask=b_input_mask,
-                                            labels=b_labels)
+            loss, logits = None, res['logits']
 
         return loss, logits
 
@@ -124,12 +125,12 @@ class Model(pl.LightningModule):
             batch
         )  # self refers to the model, which in turn acceses the forward method
 
-        tensorboard_logs = {'train_loss': loss}
+        self.log('train_loss', loss)
         # pytorch lightning allows you to use various logging facilities, eg tensorboard with tensorboard we
         # can track and easily visualise the progress of training. In this case
 
-        return {'loss': loss, 'log': tensorboard_logs}
-        # the training_step method expects a dictionary, which should at least contain the loss
+        return {'loss': loss}
+        # the training_step method expects either a dictionary or a the loss as a number
 
     def validation_step(self, batch, batch_nb):
         # the training step is a (virtual) method,specified in the interface, that the pl.LightningModule
@@ -146,8 +147,10 @@ class Model(pl.LightningModule):
         predictions = torch.argmax(logits, dim=1)
         accuracy = (labels == predictions).float().mean()
 
-        return {'val_loss': loss, 'accuracy': accuracy}
+        self.log('val_loss', loss)
+        self.log('accuracy', accuracy)
         # the validation_step method expects a dictionary, which should at least contain the val_loss
+        return {'val_loss': loss, 'val_accuracy': accuracy}
 
     def validation_epoch_end(self, validation_step_outputs):
         # OPTIONAL The second parameter in the validation_epoch_end - we named it validation_step_outputs -
@@ -159,9 +162,9 @@ class Model(pl.LightningModule):
                                 for x in validation_step_outputs]).mean()
 
         avg_accuracy = torch.stack(
-            [x['accuracy'] for x in validation_step_outputs]).mean()
+            [x['val_accuracy'] for x in validation_step_outputs]).mean()
 
-        tensorboard_logs = {'val_loss': avg_loss, 'val_accuracy': avg_accuracy}
+        tensorboard_logs = {'val_avg_loss': avg_loss, 'val_avg_accuracy': avg_accuracy}
         return {
             'val_loss': avg_loss,
             'log': tensorboard_logs,
@@ -257,7 +260,8 @@ class Data(pl.LightningDataModule):
         super().__init__()
 
         # self.save_hyperparameters()
-        if isinstance(args, tuple): args = args[0]
+        if isinstance(args, tuple):
+            args = args[0]
         self.hparams = args
         # cf this open issue: https://github.com/PyTorchLightning/pytorch-lightning/issues/3232
 
@@ -348,7 +352,7 @@ class Data(pl.LightningDataModule):
         input_ids = t['input_ids']
         attention_mask = t['attention_mask']
 
-        labels = torch.tensor(labels)
+        labels = torch.tensor(labels) # .float() if regrssion
 
         # Print sentence 0, now as a list of IDs. print('Example') print('Original: ', sentences[0])
         # print('Token IDs', input_ids[0]) print('End: Example')
@@ -417,7 +421,7 @@ if __name__ == "__main__":
 
     # Similarly BertTokenizer is one of those tokenizers, which is loaded automatically by AutoTokenizer
     # because it is the necessary tokenizer for the pretrained weights of "bert-base-uncased".
-    parser.add_argument('--pretrained', type=str, default="bert-base-uncased")
+    parser.add_argument('--pretrained', type=str, default="distilbert-base-uncased")
     parser.add_argument('--nr_frozen_epochs', type=int, default=5)
     parser.add_argument('--training_portion', type=float, default=0.9)
     parser.add_argument('--batch_size', type=float, default=32)
@@ -432,12 +436,23 @@ if __name__ == "__main__":
     # args.limit_train_batches = 10 # TODO remove this later
     # args.limit_val_batches = 5 # TODO remove this later
     # args.frac = 0.01 # TODO remove this later
+    # args.fast_dev_run = True # TODO remove this later
+    # args.max_epochs = 2 # TODO remove this later
+
+    logger = TensorBoardLogger(
+        save_dir=os.getcwd(),
+        version=1,
+        name='lightning_logs')
+
+    parser.logger = logger
     # TODO end: remove this later
 
     # start : get training steps
     d = Data(args)
     d.prepare_data()
     d.setup()
+
+
     args.num_training_steps = len(d.train_dataloader()) * args.max_epochs
     # end : get training steps
 

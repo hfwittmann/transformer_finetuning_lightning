@@ -6,23 +6,28 @@ numpy
 pandas
 torch
 torchvision
-transformers>=3.1
-pytorch-lightning
-omegaconf>=2
+transformers
+pytorch-lightning>1.0
+omegaconf
 yapf
 watermark
-pyarrow>=0.16.0          # via d6tflow, nlp
+pyarrow          # via d6tflow, nlp
 
 d6tflow
-luigi
 pylint
 # hydra-core
 skorch
 
 matplotlib
 seaborn
-traitlets==4.3.3
+traitlets
 numexpr
 pylatexenc
 
 nlp
+
+mlxtend
+sentencepiece
+shap
+simpletransformers
+textstat
